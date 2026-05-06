@@ -15,7 +15,7 @@ const APP_CONFIG = {
 
 // --- 인터페이스 정의 ---
 interface Question {
-  category?: string; // 카테고리 추가
+  category?: string;
   text: string;
   options: string[];
   answerIndex: number;
@@ -85,8 +85,11 @@ export default function App() {
   
   const [view, setView] = useState('home');
   const [adminTab, setAdminTab] = useState<'exams' | 'analytics' | 'bank'>('exams');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   
+  // 💡 학생 화면 탭 상태 추가 (study: 자율학습 창구, test: 공식시험 창구)
+  const [studentTab, setStudentTab] = useState<'study' | 'test'>('study');
+  
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [currentExamId, setCurrentExamId] = useState('');
   
   // --- 인증(Auth) 상태 ---
@@ -96,7 +99,6 @@ export default function App() {
   const [adminPasswordInput, setAdminPasswordInput] = useState(''); 
 
   const [selectedAnalyticsExamId, setSelectedAnalyticsExamId] = useState<string>('');
-
   const [activeQuestions, setActiveQuestions] = useState<Question[]>([]); 
   const [firstAttemptAnswers, setFirstAttemptAnswers] = useState<Record<number, number>>({}); 
   const [studentScore, setStudentScore] = useState(0);
@@ -104,7 +106,6 @@ export default function App() {
   const [questionQueue, setQuestionQueue] = useState<{q: Question, originalIndex: number}[]>([]); 
   const [isAnswerChecked, setIsAnswerChecked] = useState(false); 
   const [currentSelectedOption, setCurrentSelectedOption] = useState<number | null>(null); 
-
   const [testAnswers, setTestAnswers] = useState<Record<number, number>>({});
 
   const [editingExamId, setEditingExamId] = useState<string | null>(null);
@@ -115,17 +116,15 @@ export default function App() {
   const [displayCount, setDisplayCount] = useState('');
   const [requireName, setRequireName] = useState(true);
   const [recordScores, setRecordScores] = useState(true); 
-  
   const [selectedResultDetail, setSelectedResultDetail] = useState<ExamResult | null>(null);
 
   const [newQuestions, setNewQuestions] = useState<Question[]>([
     { category: '', text: '', options: ['', '', '', ''], answerIndex: 0, explanation: '' }
   ]);
-
   const [newBankQuestion, setNewBankQuestion] = useState<Question>({ category: '', text: '', options: ['', '', '', ''], answerIndex: 0, explanation: '' });
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
   const [selectedBankQuestions, setSelectedBankQuestions] = useState<Set<string>>(new Set());
-  const [bankCategoryFilter, setBankCategoryFilter] = useState<string>('all'); // 모달 카테고리 필터 상태
+  const [bankCategoryFilter, setBankCategoryFilter] = useState<string>('all');
 
   useEffect(() => {
     if (!document.getElementById('tailwind-cdn')) {
@@ -189,7 +188,6 @@ export default function App() {
 
   const handleStudentAuth = async () => {
     if (!empIdInput.trim()) return showToast('사번을 입력해주세요.');
-    
     const finalEmpId = empIdInput.trim().replace(/\s+/g, '').toUpperCase();
     const pseudoEmail = `${finalEmpId.toLowerCase()}@wuerth.exam`;
     const HIDDEN_SYSTEM_PASSWORD = "WuerthExamSecretPassword2026!";
@@ -232,7 +230,6 @@ export default function App() {
       setUser(currentUser);
       if (userProf) setUserProfile(userProf as UserProfile);
       setEmpIdInput(''); setNameInput('');
-      
       if (currentExamId) setView('student-entry'); 
     } catch (error: any) {
       if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
@@ -317,7 +314,7 @@ export default function App() {
       options: [cols[1], cols[2], cols[3], cols[4]], 
       answerIndex: parseInt(cols[5]) - 1,
       explanation: cols[6] || '',
-      category: cols[7] || '미분류' // CSV 8번째 열을 카테고리로 인식
+      category: cols[7] || '미분류'
     })).filter(q => q.text && q.options.length >= 4 && !isNaN(q.answerIndex));
   };
 
@@ -375,26 +372,22 @@ export default function App() {
       const { id, createdAt, ...rest } = q;
       return rest;
     });
-    
     if (selected.length === 0) return showToast('선택된 문제가 없습니다.');
-    
     const existingNotEmpty = newQuestions.filter(q => q.text.trim() !== '');
     setNewQuestions([...existingNotEmpty, ...selected]);
     setIsBankModalOpen(false);
     setSelectedBankQuestions(new Set());
-    setBankCategoryFilter('all'); // 필터 초기화
+    setBankCategoryFilter('all');
     showToast(`${selected.length}문제가 시험지에 추가되었습니다!`);
   };
 
   const handleSaveExam = async () => {
     if (!newExamTitle.trim()) return showToast('제목을 입력해주세요.');
-    
     let finalId = customExamId.trim().replace(/\s+/g, '-'); 
     if (!finalId) {
         if (editingExamId) finalId = editingExamId;
         else finalId = Math.random().toString(36).substring(2, 8).toUpperCase();
     }
-
     const cleanedQuestions = newQuestions.filter(q => q.text.trim() !== '').map(q => ({...q, category: q.category || '미분류', explanation: q.explanation || ''}));
     if (cleanedQuestions.length === 0) return showToast('최소 1개 이상의 문제를 등록해주세요.');
     const dCount = parseInt(displayCount) || cleanedQuestions.length;
@@ -436,7 +429,6 @@ export default function App() {
     if (!user || !userProfile) return showToast('회원 인증에 실패했습니다. 다시 로그인해주세요.');
 
     let masteredQuestions: string[] = [];
-    
     if (exam.mode === 'study') {
       const progressDocRef = doc(db, 'progress', `${user.uid}_${currentExamId}`);
       const progressDoc = await getDoc(progressDocRef);
@@ -467,7 +459,6 @@ export default function App() {
       setIsAnswerChecked(false);
       setCurrentSelectedOption(null);
     }
-    
     setView('student-take');
   };
 
@@ -476,7 +467,6 @@ export default function App() {
     const currentItem = questionQueue[0];
     setCurrentSelectedOption(optionIndex);
     setIsAnswerChecked(true);
-
     setFirstAttemptAnswers(prev => {
         if (prev[currentItem.originalIndex] === undefined) {
             return {...prev, [currentItem.originalIndex]: optionIndex};
@@ -524,7 +514,6 @@ export default function App() {
     if (!exam || !userProfile) return;
 
     let newlyMasteredTexts: string[] = [];
-    
     const correctCount = activeQuestions.reduce((count, q, idx) => {
         if (finalAnswers[idx] === q.answerIndex) {
           if (exam.mode === 'study') newlyMasteredTexts.push(q.text); 
@@ -559,7 +548,6 @@ export default function App() {
         updatedAt: Date.now()
       }, { merge: true });
     }
-    
     setView('student-result');
   };
 
@@ -605,12 +593,10 @@ export default function App() {
   const exportToCSV = () => {
     const targetExam = exams.find(e => e.id === selectedAnalyticsExamId);
     if (!targetExam) return showToast('선택된 시험을 찾을 수 없습니다.');
-    
     const targetResults = getFilteredResults();
     if (targetResults.length === 0) return showToast('다운로드할 응시 기록이 없습니다.');
 
     let headers = ["시험명", "응시 모드", "사번", "이름", "최종 점수", "제출 일시"];
-    
     targetExam.questions.forEach((_, idx) => {
       headers.push(`[Q${idx+1}] 정/오답`);
       headers.push(`[Q${idx+1}] 제출한 답안`);
@@ -628,12 +614,10 @@ export default function App() {
       
       targetExam.questions.forEach((examQ) => {
         const studentQIdx = r.activeQuestions?.findIndex(aq => aq.text === examQ.text);
-        
         if (studentQIdx !== undefined && studentQIdx !== -1) {
           const studentAnswerIdx = r.answers[studentQIdx];
           const isCorrect = studentAnswerIdx === examQ.answerIndex;
           const studentAnswerText = studentAnswerIdx !== undefined ? examQ.options[studentAnswerIdx] : '선택 안함';
-          
           baseRow.push(isCorrect ? 'O' : 'X');
           baseRow.push(studentAnswerText);
         } else {
@@ -646,13 +630,15 @@ export default function App() {
 
     const escapeCSV = (str: any) => `"${String(str).replace(/"/g, '""')}"`;
     const csvContent = [headers.map(escapeCSV), ...rows.map(row => row.map(escapeCSV))].map(e => e.join(",")).join("\n");
-    
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = `[${targetExam.title}] 상세_응시결과.csv`;
     link.click();
   };
+
+  // 현재 탭에 맞는 시험 목록 필터링
+  const displayedExams = exams.filter(e => e.mode === studentTab);
 
   return (
     <>
@@ -662,14 +648,7 @@ export default function App() {
 
       <div className="min-h-[100dvh] font-sans bg-slate-50 text-slate-900 relative">
         {APP_CONFIG.bgImageUrl && (
-          <div 
-            className="fixed inset-0 z-0" 
-            style={{ 
-              backgroundImage: `url(${APP_CONFIG.bgImageUrl})`, 
-              backgroundSize: 'cover', 
-              backgroundPosition: 'center' 
-            }}
-          />
+          <div className="fixed inset-0 z-0" style={{ backgroundImage: `url(${APP_CONFIG.bgImageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }}/>
         )}
         {APP_CONFIG.bgImageUrl && <div className="fixed inset-0 bg-white/70 backdrop-blur-sm z-0"></div>}
 
@@ -693,35 +672,20 @@ export default function App() {
 
           <main className="p-6 max-w-5xl mx-auto w-full flex-1 flex flex-col">
             
+            {/* 로그인 전 홈 화면 */}
             {view === 'home' && !userProfile && (
               <div className="flex flex-col items-center gap-12 py-20 text-center flex-1 justify-center">
                 <h2 className="text-4xl sm:text-5xl font-black text-slate-800 break-keep">뷔르트 제품 Quiz</h2>
-                
                 <div className="bg-white p-8 sm:p-10 rounded-[2.5rem] shadow-sm border w-full max-w-md space-y-6">
                   <div className="flex bg-slate-100 p-1 rounded-2xl mb-6">
                     <button onClick={() => setAuthMode('login')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${authMode === 'login' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}>사번으로 시작</button>
                     <button onClick={() => setAuthMode('register')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${authMode === 'register' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}>최초 등록</button>
                   </div>
-                  
                   <div className="space-y-4">
-                    <input 
-                      type="text" 
-                      value={empIdInput} 
-                      onChange={e => setEmpIdInput(e.target.value.toUpperCase())} 
-                      placeholder="사번 (예: WN1234)" 
-                      className="w-full bg-slate-50 border p-4 rounded-2xl text-sm outline-none focus:border-blue-500 transition-colors text-center font-bold placeholder:font-normal"
-                    />
-                    
+                    <input type="text" value={empIdInput} onChange={e => setEmpIdInput(e.target.value.toUpperCase())} placeholder="사번 (예: WN1234)" className="w-full bg-slate-50 border p-4 rounded-2xl text-sm outline-none focus:border-blue-500 transition-colors text-center font-bold placeholder:font-normal"/>
                     {authMode === 'register' && (
-                      <input 
-                        type="text" 
-                        value={nameInput} 
-                        onChange={e => setNameInput(e.target.value)} 
-                        placeholder="실명 (예: 홍길동)" 
-                        className="w-full bg-slate-50 border p-4 rounded-2xl text-sm outline-none focus:border-blue-500 transition-colors text-center font-bold placeholder:font-normal"
-                      />
+                      <input type="text" value={nameInput} onChange={e => setNameInput(e.target.value)} placeholder="실명 (예: 홍길동)" className="w-full bg-slate-50 border p-4 rounded-2xl text-sm outline-none focus:border-blue-500 transition-colors text-center font-bold placeholder:font-normal"/>
                     )}
-                    
                     <button onClick={handleStudentAuth} className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-md hover:bg-blue-700 transition-colors mt-2">
                       {authMode === 'login' ? '입장하기' : '등록하고 입장하기'}
                     </button>
@@ -730,46 +694,76 @@ export default function App() {
               </div>
             )}
 
+            {/* 💡 완전히 새로워진 로그인 후 학생 대시보드 (자율학습 vs 평가 탭 분리) */}
             {view === 'home' && userProfile && (
                <div className="flex flex-col items-center py-10 w-full animate-fade-in-up">
                 <div className="text-center mb-10">
                   <span className="text-5xl mb-4 block">👋</span>
                   <h2 className="text-3xl sm:text-4xl font-black text-slate-800 break-keep">환영합니다, {userProfile.name}님!</h2>
-                  <p className="text-slate-500 mt-2 font-medium">응시할 시험을 선택하고 바로 시작해보세요.</p>
+                  <p className="text-slate-500 mt-2 font-medium">원하시는 메뉴를 선택해 주세요.</p>
                 </div>
 
-                <div className="w-full max-w-2xl bg-white p-6 sm:p-10 rounded-[2.5rem] shadow-sm border border-slate-200">
-                  <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
-                    <span className="text-blue-500">📋</span> 현재 열려있는 시험 목록
-                  </h3>
-                  
-                  {exams.length === 0 ? (
-                    <div className="text-center py-12 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                      <p className="text-slate-400 font-bold">현재 등록된 시험이 없습니다.</p>
+                <div className="w-full max-w-3xl">
+                  {/* 탭 네비게이션 */}
+                  <div className="flex p-1.5 bg-slate-200/50 rounded-2xl sm:rounded-full mb-8 relative z-10 w-full">
+                    <button 
+                      onClick={() => setStudentTab('study')} 
+                      className={`flex-1 py-4 sm:py-5 rounded-xl sm:rounded-full font-black text-base sm:text-lg transition-all flex items-center justify-center gap-2 ${studentTab === 'study' ? 'bg-white shadow-lg text-emerald-600 scale-[1.02]' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      <span>📖</span> 자율 학습 창구
+                    </button>
+                    <button 
+                      onClick={() => setStudentTab('test')} 
+                      className={`flex-1 py-4 sm:py-5 rounded-xl sm:rounded-full font-black text-base sm:text-lg transition-all flex items-center justify-center gap-2 ${studentTab === 'test' ? 'bg-white shadow-lg text-purple-600 scale-[1.02]' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      <span>📝</span> 공식 평가 창구
+                    </button>
+                  </div>
+
+                  {/* 콘텐츠 영역 */}
+                  <div className="bg-white p-6 sm:p-10 rounded-[2.5rem] shadow-sm border border-slate-200 w-full">
+                    <div className="mb-6 border-b pb-4">
+                      {studentTab === 'study' ? (
+                        <>
+                          <h3 className="text-xl font-black text-emerald-700 flex items-center gap-2">📖 현재 진행 가능한 자율 학습 목록</h3>
+                          <p className="text-sm text-slate-500 mt-2">정답과 해설을 확인하며 내 페이스대로 자유롭게 학습할 수 있습니다.</p>
+                        </>
+                      ) : (
+                        <>
+                          <h3 className="text-xl font-black text-purple-700 flex items-center gap-2">📝 현재 응시해야 할 공식 평가 목록</h3>
+                          <p className="text-sm text-slate-500 mt-2">제출 시 성적이 기록되며 한 번에 모든 문제를 푸는 일제 평가입니다.</p>
+                        </>
+                      )}
                     </div>
-                  ) : (
-                    <div className="grid gap-4">
-                      {exams.map(exam => (
-                        <div key={exam.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-5 bg-slate-50 border border-slate-200 rounded-3xl hover:border-blue-300 hover:bg-blue-50/50 transition-all gap-4 group">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-bold text-lg text-slate-800 group-hover:text-blue-700 transition-colors break-keep">{exam.title}</h4>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${exam.mode === 'test' ? 'bg-purple-100 text-purple-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                                {exam.mode === 'test' ? '평가형' : '학습형'}
-                              </span>
+                    
+                    {displayedExams.length === 0 ? (
+                      <div className="text-center py-16 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                        <span className="text-4xl mb-4 block opacity-50">{studentTab === 'study' ? '📚' : '📄'}</span>
+                        <p className="text-slate-500 font-bold">현재 등록된 {studentTab === 'study' ? '학습 과정이' : '평가가'} 없습니다.</p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-4">
+                        {displayedExams.map(exam => (
+                          <div key={exam.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-5 sm:p-6 bg-slate-50 border border-slate-200 rounded-3xl hover:border-blue-300 hover:bg-blue-50/50 transition-all gap-5 group">
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <h4 className="font-bold text-lg sm:text-xl text-slate-800 group-hover:text-blue-700 transition-colors break-keep">{exam.title}</h4>
+                              </div>
+                              <div className="flex gap-3 text-xs font-bold text-slate-500">
+                                <span className="bg-slate-200/50 px-3 py-1 rounded-lg">문항 수: {exam.displayCount || exam.questions.length}개</span>
+                              </div>
                             </div>
-                            <p className="text-xs text-slate-500">출제 문항 수: {exam.displayCount || exam.questions.length}개</p>
+                            <button 
+                              onClick={() => { setCurrentExamId(exam.id); setView('student-entry'); }}
+                              className={`w-full sm:w-auto text-white px-8 py-4 rounded-2xl font-black transition-all text-sm sm:text-base shadow-md active:scale-95 whitespace-nowrap ${studentTab === 'study' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200' : 'bg-purple-500 hover:bg-purple-600 shadow-purple-200'}`}
+                            >
+                              {studentTab === 'study' ? '학습 시작하기 👉' : '응시 시작하기 👉'}
+                            </button>
                           </div>
-                          <button 
-                            onClick={() => { setCurrentExamId(exam.id); setView('student-entry'); }}
-                            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold transition-all text-sm shadow-md active:scale-95 whitespace-nowrap"
-                          >
-                            시험 입장하기 👉
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <button onClick={() => setView('admin-login')} className="mt-12 text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">
@@ -778,6 +772,7 @@ export default function App() {
               </div>
             )}
 
+            {/* 관리자 로그인 & 대시보드 화면들 (기존과 동일) */}
             {view === 'admin-login' && (
               <div className="max-w-md mx-auto py-20 text-center flex-1">
                 <h2 className="text-2xl font-bold mb-8 text-slate-800">관리자 인증</h2>
@@ -808,7 +803,7 @@ export default function App() {
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
                               <h4 className="font-bold text-lg sm:text-xl text-slate-800 break-keep">{exam.title}</h4>
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${exam.mode === 'test' ? 'bg-purple-100 text-purple-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                                {exam.mode === 'test' ? '일제 평가형' : '적응형 학습 (자동건너뛰기)'}
+                                {exam.mode === 'test' ? '일제 평가형 (공식평가 창구)' : '적응형 학습 (자율학습 창구)'}
                               </span>
                             </div>
                             <p className="text-xs text-blue-500 font-mono mb-1">코드: {exam.id}</p>
@@ -837,7 +832,6 @@ export default function App() {
 
                      <div className="bg-blue-50/50 p-6 sm:p-8 rounded-[2.5rem] border border-blue-100 space-y-4">
                        <h4 className="font-bold text-blue-800 mb-2">새로운 문제 단건 등록</h4>
-                       {/* 💡 카테고리 입력 필드 추가 */}
                        <input 
                          value={newBankQuestion.category} 
                          onChange={e => setNewBankQuestion({...newBankQuestion, category: e.target.value})} 
@@ -987,15 +981,15 @@ export default function App() {
                       <div onClick={() => setNewExamMode('study')} className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${newExamMode === 'study' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-100 hover:border-slate-200'}`}>
                         <span className="text-2xl">🔁</span>
                         <div>
-                          <h5 className={`font-bold text-sm ${newExamMode === 'study' ? 'text-emerald-700' : 'text-slate-700'}`}>적응형 학습 (단어장)</h5>
-                          <p className="text-[10px] text-slate-500 mt-1">틀린 문제는 맞출 때까지 반복 출제되며, <strong className="text-emerald-600">다음에 접속 시 이미 마스터한 문제는 자동으로 제외</strong>됩니다.</p>
+                          <h5 className={`font-bold text-sm ${newExamMode === 'study' ? 'text-emerald-700' : 'text-slate-700'}`}>적응형 학습 (자율학습 창구로 배치)</h5>
+                          <p className="text-[10px] text-slate-500 mt-1">학생의 자율학습 창구에 노출됩니다. 틀린 문제는 맞출 때까지 반복 출제됩니다.</p>
                         </div>
                       </div>
                       <div onClick={() => setNewExamMode('test')} className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-center gap-3 ${newExamMode === 'test' ? 'border-purple-500 bg-purple-50' : 'border-slate-100 hover:border-slate-200'}`}>
                         <span className="text-2xl">📝</span>
                         <div>
-                          <h5 className={`font-bold text-sm ${newExamMode === 'test' ? 'text-purple-700' : 'text-slate-700'}`}>평가형 (일제 시험형)</h5>
-                          <p className="text-[10px] text-slate-500 mt-1">한 번에 전체를 풀고 제출하여 평가합니다. 매번 모든 문제가 다시 출제됩니다.</p>
+                          <h5 className={`font-bold text-sm ${newExamMode === 'test' ? 'text-purple-700' : 'text-slate-700'}`}>평가형 (공식평가 창구로 배치)</h5>
+                          <p className="text-[10px] text-slate-500 mt-1">학생의 공식평가 창구에 노출됩니다. 한 번에 전체를 풀고 제출하여 평가합니다.</p>
                         </div>
                       </div>
                     </div>
@@ -1007,7 +1001,7 @@ export default function App() {
                       <label className="flex items-center justify-between cursor-pointer">
                         <div className="pr-4">
                           <h5 className="font-bold text-sm text-slate-700">성적 데이터 저장</h5>
-                          <p className="text-[10px] text-slate-500 mt-1">끄면 학생의 점수가 통계에 남지 않고 학생 본인 화면에만 표시됩니다.</p>
+                          <p className="text-[10px] text-slate-500 mt-1">끄면 학생의 점수가 통계에 남지 않고 학생 본인 화면에만 표시됩니다. <br/><span className="text-blue-500 font-bold">(자율 학습용 배포 시 끄는 것을 권장합니다.)</span></p>
                         </div>
                         <div className={`w-12 h-6 rounded-full relative transition-colors shrink-0 ${recordScores ? 'bg-blue-600' : 'bg-slate-200'}`} onClick={() => setRecordScores(!recordScores)}>
                           <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${recordScores ? 'translate-x-7' : 'translate-x-1'}`}></div>
@@ -1064,13 +1058,16 @@ export default function App() {
               </div>
             )}
 
+            {/* 입장 대기 화면 */}
             {view === 'student-entry' && (
               <div className="max-w-md mx-auto py-10 space-y-8 sm:space-y-10 px-2 sm:px-0">
                 <div className="text-center space-y-4 sm:space-y-6">
                     {APP_CONFIG.mainIconUrl ? (
                       <img src={APP_CONFIG.mainIconUrl} alt="Main Icon" className="w-24 h-24 sm:w-32 sm:h-32 mx-auto object-contain animate-bounce" />
                     ) : (
-                      <div className="text-7xl sm:text-8xl animate-bounce">🏆</div>
+                      <div className="text-7xl sm:text-8xl animate-bounce">
+                        {exams.find(e => e.id === currentExamId)?.mode === 'study' ? '📖' : '🏆'}
+                      </div>
                     )}
                     <h2 className="text-2xl sm:text-4xl font-black text-slate-800 leading-tight break-keep">{exams.find(e => e.id === currentExamId)?.title}</h2>
                 </div>
@@ -1087,13 +1084,19 @@ export default function App() {
 
                 <div className="space-y-3 sm:space-y-4">
                   <div className="bg-slate-50 p-6 rounded-[2rem] text-center border-2 border-slate-100">
-                    <p className="font-bold text-slate-700">응시자: <span className="text-blue-600">{userProfile?.name}</span> ({userProfile?.employeeId})</p>
+                    <p className="font-bold text-slate-700">접속자: <span className="text-blue-600">{userProfile?.name}</span> ({userProfile?.employeeId})</p>
                   </div>
-                  <button onClick={startExam} className="w-full bg-blue-600 text-white py-5 sm:py-6 rounded-[2rem] font-black text-lg sm:text-xl shadow-xl hover:bg-blue-700 transition-all active:scale-95">시험 시작하기</button>
+                  <button 
+                    onClick={startExam} 
+                    className={`w-full text-white py-5 sm:py-6 rounded-[2rem] font-black text-lg sm:text-xl shadow-xl transition-all active:scale-95 ${exams.find(e => e.id === currentExamId)?.mode === 'study' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-purple-600 hover:bg-purple-700'}`}
+                  >
+                    {exams.find(e => e.id === currentExamId)?.mode === 'study' ? '자율 학습 시작하기' : '공식 평가 시작하기'}
+                  </button>
                 </div>
               </div>
             )}
 
+            {/* 공식 시험 응시 화면 */}
             {view === 'student-take' && exams.find(e => e.id === currentExamId)?.mode === 'test' && activeQuestions.length > 0 && (
               <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8 pb-32">
                 <div className="bg-white/90 backdrop-blur-md p-4 sm:p-6 rounded-3xl sm:rounded-[2rem] sticky top-20 border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 shadow-xl z-20">
@@ -1140,6 +1143,7 @@ export default function App() {
               </div>
             )}
 
+            {/* 자율 학습 진행 화면 */}
             {view === 'student-take' && exams.find(e => e.id === currentExamId)?.mode !== 'test' && questionQueue.length > 0 && (
               <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8 pb-32">
                 <div className="bg-white/90 backdrop-blur-md p-4 sm:p-6 rounded-3xl sm:rounded-[2rem] sticky top-20 border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 shadow-xl z-20">
@@ -1214,6 +1218,7 @@ export default function App() {
               </div>
             )}
 
+            {/* 결과(완료) 화면 */}
             {view === 'student-result' && (
               <div className="max-w-2xl mx-auto py-10 sm:py-20 text-center space-y-6 sm:space-y-8 px-4 sm:px-0">
                 <div className="text-7xl sm:text-9xl mb-2 sm:mb-4 animate-pulse">🎉</div>
@@ -1234,7 +1239,7 @@ export default function App() {
           </main>
         </div>
 
-        {/* 💡 문제 창고 필터 및 선택 모달 업데이트 */}
+        {/* 문제 창고 필터 및 선택 모달 */}
         {isBankModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
             <div className="bg-white rounded-[2rem] p-6 sm:p-8 max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl">
@@ -1245,7 +1250,6 @@ export default function App() {
                 </div>
                 
                 <div className="flex items-center gap-3 w-full sm:w-auto">
-                  {/* 카테고리 필터 드롭다운 */}
                   <select 
                     value={bankCategoryFilter}
                     onChange={(e) => setBankCategoryFilter(e.target.value)}
@@ -1294,7 +1298,6 @@ export default function App() {
                     );
                   })
                 )}
-                {/* 필터 결과가 없을 때 */}
                 {questionBank.length > 0 && questionBank.filter(q => bankCategoryFilter === 'all' || (q.category || '미분류') === bankCategoryFilter).length === 0 && (
                    <p className="text-center text-slate-400 py-10">해당 카테고리에 등록된 문제가 없습니다.</p>
                 )}
