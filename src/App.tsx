@@ -15,6 +15,7 @@ const APP_CONFIG = {
 
 // --- 인터페이스 정의 ---
 interface Question {
+  category?: string; // 카테고리 추가
   text: string;
   options: string[];
   answerIndex: number;
@@ -118,12 +119,13 @@ export default function App() {
   const [selectedResultDetail, setSelectedResultDetail] = useState<ExamResult | null>(null);
 
   const [newQuestions, setNewQuestions] = useState<Question[]>([
-    { text: '', options: ['', '', '', ''], answerIndex: 0, explanation: '' }
+    { category: '', text: '', options: ['', '', '', ''], answerIndex: 0, explanation: '' }
   ]);
 
-  const [newBankQuestion, setNewBankQuestion] = useState<Question>({ text: '', options: ['', '', '', ''], answerIndex: 0, explanation: '' });
+  const [newBankQuestion, setNewBankQuestion] = useState<Question>({ category: '', text: '', options: ['', '', '', ''], answerIndex: 0, explanation: '' });
   const [isBankModalOpen, setIsBankModalOpen] = useState(false);
   const [selectedBankQuestions, setSelectedBankQuestions] = useState<Set<string>>(new Set());
+  const [bankCategoryFilter, setBankCategoryFilter] = useState<string>('all'); // 모달 카테고리 필터 상태
 
   useEffect(() => {
     if (!document.getElementById('tailwind-cdn')) {
@@ -185,7 +187,6 @@ export default function App() {
     showToast('응시 링크가 복사되었습니다!');
   };
 
-  // --- 💡 강력해진 인증 및 좀비 계정 자동 복구 로직 ---
   const handleStudentAuth = async () => {
     if (!empIdInput.trim()) return showToast('사번을 입력해주세요.');
     
@@ -206,7 +207,6 @@ export default function App() {
           await setDoc(doc(db, 'users', currentUser.uid), userProf);
           showToast('가입이 완료되었습니다!');
         } catch (err: any) {
-          // 아까 권한 에러 났을 때 생성된 좀비 계정을 마주치면 자동으로 치료하고 로그인시킴!
           if (err.code === 'auth/email-already-in-use') {
              const userCredential = await signInWithEmailAndPassword(auth, pseudoEmail, HIDDEN_SYSTEM_PASSWORD);
              currentUser = userCredential.user;
@@ -290,7 +290,7 @@ export default function App() {
     setNewExamNotice(''); setNewExamMode('study'); setRequireName(true);
     setRecordScores(true);
     setDisplayCount('');
-    setNewQuestions([{ text: '', options: ['', '', '', ''], answerIndex: 0, explanation: '' }]); 
+    setNewQuestions([{ category: '', text: '', options: ['', '', '', ''], answerIndex: 0, explanation: '' }]); 
   };
 
   const parseCSV = (text: string) => {
@@ -316,7 +316,8 @@ export default function App() {
       text: cols[0], 
       options: [cols[1], cols[2], cols[3], cols[4]], 
       answerIndex: parseInt(cols[5]) - 1,
-      explanation: cols[6] || ''
+      explanation: cols[6] || '',
+      category: cols[7] || '미분류' // CSV 8번째 열을 카테고리로 인식
     })).filter(q => q.text && q.options.length >= 4 && !isNaN(q.answerIndex));
   };
 
@@ -363,8 +364,8 @@ export default function App() {
   const handleSaveBankQuestion = async () => {
     if (!newBankQuestion.text.trim()) return showToast('문제를 입력해주세요.');
     try {
-      await addDoc(collection(db, 'questionBank'), { ...newBankQuestion, createdAt: Date.now() });
-      setNewBankQuestion({ text: '', options: ['', '', '', ''], answerIndex: 0, explanation: '' });
+      await addDoc(collection(db, 'questionBank'), { ...newBankQuestion, category: newBankQuestion.category || '미분류', createdAt: Date.now() });
+      setNewBankQuestion({ category: '', text: '', options: ['', '', '', ''], answerIndex: 0, explanation: '' });
       showToast('문제 창고에 저장되었습니다.');
     } catch(e) { showToast('저장 실패'); }
   };
@@ -381,6 +382,7 @@ export default function App() {
     setNewQuestions([...existingNotEmpty, ...selected]);
     setIsBankModalOpen(false);
     setSelectedBankQuestions(new Set());
+    setBankCategoryFilter('all'); // 필터 초기화
     showToast(`${selected.length}문제가 시험지에 추가되었습니다!`);
   };
 
@@ -393,7 +395,7 @@ export default function App() {
         else finalId = Math.random().toString(36).substring(2, 8).toUpperCase();
     }
 
-    const cleanedQuestions = newQuestions.filter(q => q.text.trim() !== '').map(q => ({...q, explanation: q.explanation || ''}));
+    const cleanedQuestions = newQuestions.filter(q => q.text.trim() !== '').map(q => ({...q, category: q.category || '미분류', explanation: q.explanation || ''}));
     if (cleanedQuestions.length === 0) return showToast('최소 1개 이상의 문제를 등록해주세요.');
     const dCount = parseInt(displayCount) || cleanedQuestions.length;
 
@@ -728,7 +730,6 @@ export default function App() {
               </div>
             )}
 
-            {/* 💡 완전히 새로워진 대기실(학생 홈) UI: 코드를 칠 필요 없이 목록에서 바로 입장! */}
             {view === 'home' && userProfile && (
                <div className="flex flex-col items-center py-10 w-full animate-fade-in-up">
                 <div className="text-center mb-10">
@@ -836,6 +837,13 @@ export default function App() {
 
                      <div className="bg-blue-50/50 p-6 sm:p-8 rounded-[2.5rem] border border-blue-100 space-y-4">
                        <h4 className="font-bold text-blue-800 mb-2">새로운 문제 단건 등록</h4>
+                       {/* 💡 카테고리 입력 필드 추가 */}
+                       <input 
+                         value={newBankQuestion.category} 
+                         onChange={e => setNewBankQuestion({...newBankQuestion, category: e.target.value})} 
+                         className="w-full mb-2 p-3 bg-white border border-blue-200 rounded-xl text-sm outline-none" 
+                         placeholder="카테고리 (예: 케미컬류, 수공구, 기타소모품)"
+                       />
                        <textarea value={newBankQuestion.text} onChange={e => setNewBankQuestion({...newBankQuestion, text: e.target.value})} className="w-full text-lg font-bold outline-none resize-none bg-white p-4 rounded-xl border border-blue-200" placeholder="문제를 입력하세요" rows={2}/>
                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                          {newBankQuestion.options.map((opt, oi) => (
@@ -854,6 +862,9 @@ export default function App() {
                        {questionBank.map((q) => (
                          <div key={q.id} className="bg-white p-5 rounded-2xl border flex flex-col sm:flex-row justify-between gap-4 group hover:border-blue-300 transition-colors">
                            <div className="flex-1">
+                             <div className="flex items-center gap-2 mb-2">
+                               <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded-md font-bold">{q.category || '미분류'}</span>
+                             </div>
                              <p className="font-bold text-slate-800 line-clamp-2"><span className="text-blue-400 mr-2">Q.</span>{q.text}</p>
                              <div className="flex flex-wrap gap-2 mt-2">
                                <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md font-bold shrink-0">정답: {q.options[q.answerIndex]}</span>
@@ -1047,7 +1058,7 @@ export default function App() {
                       </div>
                     </div>
                   ))}
-                  <button onClick={() => setNewQuestions([...newQuestions, {text:'', options:['','','',''], answerIndex:0, explanation: ''}])} className="w-full py-8 sm:py-10 bg-white border-4 border-dashed border-slate-100 rounded-[2.5rem] text-slate-300 font-black text-base sm:text-lg hover:border-blue-100 hover:text-blue-400 transition-all">+ 빈 문항 추가하기</button>
+                  <button onClick={() => setNewQuestions([...newQuestions, {category: '', text:'', options:['','','',''], answerIndex:0, explanation: ''}])} className="w-full py-8 sm:py-10 bg-white border-4 border-dashed border-slate-100 rounded-[2.5rem] text-slate-300 font-black text-base sm:text-lg hover:border-blue-100 hover:text-blue-400 transition-all">+ 빈 문항 추가하기</button>
                 </div>
                 <button onClick={handleSaveExam} className="w-full py-5 sm:py-6 bg-slate-900 hover:bg-slate-800 text-white rounded-[2.5rem] font-black text-lg sm:text-xl sticky bottom-4 shadow-2xl active:scale-95 transition-all z-20">설정 저장하고 출시하기</button>
               </div>
@@ -1223,23 +1234,39 @@ export default function App() {
           </main>
         </div>
 
-        {/* 창고에서 문제 불러오기 모달 */}
+        {/* 💡 문제 창고 필터 및 선택 모달 업데이트 */}
         {isBankModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
             <div className="bg-white rounded-[2rem] p-6 sm:p-8 max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl">
-              <div className="flex justify-between items-center mb-6 shrink-0 border-b pb-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 shrink-0 border-b pb-4 gap-4">
                 <div>
-                  <h3 className="text-xl sm:text-2xl font-black text-slate-800">🗃️ 문제 창고</h3>
-                  <p className="text-sm text-slate-500 mt-1">시험지에 추가할 문제를 선택하세요. (총 {questionBank.length}개)</p>
+                  <h3 className="text-xl sm:text-2xl font-black text-slate-800 flex items-center gap-2">🗃️ 문제 창고</h3>
+                  <p className="text-sm text-slate-500 mt-1">시험지에 추가할 문제를 선택하세요.</p>
                 </div>
-                <button onClick={() => {setIsBankModalOpen(false); setSelectedBankQuestions(new Set());}} className="w-10 h-10 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full flex items-center justify-center font-bold transition-colors">✕</button>
+                
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  {/* 카테고리 필터 드롭다운 */}
+                  <select 
+                    value={bankCategoryFilter}
+                    onChange={(e) => setBankCategoryFilter(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl outline-none font-bold p-2 flex-1 sm:w-40"
+                  >
+                    <option value="all">전체 카테고리 보기</option>
+                    {Array.from(new Set(questionBank.map(q => q.category || '미분류'))).map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                  <button onClick={() => {setIsBankModalOpen(false); setSelectedBankQuestions(new Set()); setBankCategoryFilter('all');}} className="w-10 h-10 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full flex items-center justify-center font-bold transition-colors shrink-0">✕</button>
+                </div>
               </div>
 
               <div className="space-y-3 overflow-y-auto pr-2 custom-scrollbar flex-1 mb-6">
                 {questionBank.length === 0 ? (
                   <p className="text-center text-slate-400 py-10">창고에 등록된 문제가 없습니다. 관리자 대시보드에서 먼저 문제를 등록해주세요.</p>
                 ) : (
-                  questionBank.map((q) => {
+                  questionBank
+                    .filter(q => bankCategoryFilter === 'all' || (q.category || '미분류') === bankCategoryFilter)
+                    .map((q) => {
                     const isSelected = selectedBankQuestions.has(q.id);
                     return (
                       <label key={q.id} className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-slate-100 hover:border-blue-200 bg-white'}`}>
@@ -1257,12 +1284,19 @@ export default function App() {
                           />
                         </div>
                         <div>
+                          <div className="flex gap-2 mb-1">
+                            <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">{q.category || '미분류'}</span>
+                          </div>
                           <p className={`font-bold text-sm sm:text-base line-clamp-2 ${isSelected ? 'text-blue-800' : 'text-slate-700'}`}>{q.text}</p>
                           <p className="text-xs text-slate-400 mt-1">정답: {q.options[q.answerIndex]}</p>
                         </div>
                       </label>
                     );
                   })
+                )}
+                {/* 필터 결과가 없을 때 */}
+                {questionBank.length > 0 && questionBank.filter(q => bankCategoryFilter === 'all' || (q.category || '미분류') === bankCategoryFilter).length === 0 && (
+                   <p className="text-center text-slate-400 py-10">해당 카테고리에 등록된 문제가 없습니다.</p>
                 )}
               </div>
               <button 
