@@ -184,7 +184,6 @@ export default function App() {
     showToast('응시 링크가 복사되었습니다!');
   };
 
-  // 💡 사번 WN 자동 결합 및 8자리 검증 로직 추가
   const handleStudentAuth = async () => {
     if (!empIdInput.trim()) return showToast('사번을 입력해주세요.');
     if (empIdInput.length !== 8) return showToast('사번은 숫자 8자리로 입력해주세요. (예: 00155720)');
@@ -424,6 +423,19 @@ export default function App() {
     } catch (e) { showToast('저장 실패'); }
   };
 
+  // 💡 진도 초기화 함수 (완벽주의자용)
+  const handleResetProgress = async (examId: string) => {
+    if (!userProfile) return;
+    if (window.confirm('지금까지 맞춘 학습 기록을 모두 초기화하고 처음부터 다시 시작하시겠습니까? (삭제된 기록은 복구할 수 없습니다)')) {
+      try {
+        await deleteDoc(doc(db, 'progress', `${userProfile.uid}_${examId}`));
+        showToast('학습 기록이 완벽하게 초기화되었습니다. 처음부터 다시 시작할 수 있습니다.');
+      } catch (e) {
+        showToast('기록 초기화 중 오류가 발생했습니다.');
+      }
+    }
+  };
+
   const startExam = async () => {
     const exam = exams.find(e => e.id === currentExamId);
     if (!exam) return showToast('시험 코드를 확인하세요.');
@@ -447,8 +459,9 @@ export default function App() {
       return;
     }
 
-    const finalCount = parseInt(exam.displayCount?.toString() || pool.length.toString());
-    const selectedQuestions = pool.sort(() => Math.random() - 0.5).slice(0, finalCount);
+    // 💡 자율 학습은 랜덤 문항 수 무시하고 무조건 남은 전체 풀기 설정
+    const finalCount = exam.mode === 'study' ? pool.length : parseInt(exam.displayCount?.toString() || pool.length.toString());
+    const selectedQuestions = exam.mode === 'study' ? pool : pool.sort(() => Math.random() - 0.5).slice(0, finalCount);
     
     setActiveQuestions(selectedQuestions);
     setFirstAttemptAnswers({});
@@ -476,6 +489,7 @@ export default function App() {
     });
   };
 
+  // 💡 정답 시 실시간 저장 (Auto-save) & 오답 시 뒤로 보내기 로직
   const handleStudyNextQuestion = () => {
     if (questionQueue.length === 0) return;
     const currentItem = questionQueue[0];
@@ -483,8 +497,20 @@ export default function App() {
     let nextQueue = [...questionQueue];
     const shiftedItem = nextQueue.shift();
 
-    if (!isCorrect && shiftedItem) {
+    if (isCorrect) {
+      // 💡 정답을 맞히면 즉시 백그라운드에서 진도를 저장합니다. (Auto-save)
+      if (userProfile) {
+        const progressDocRef = doc(db, 'progress', `${userProfile.uid}_${currentExamId}`);
+        setDoc(progressDocRef, {
+          masteredQuestionTexts: arrayUnion(currentItem.q.text),
+          updatedAt: Date.now()
+        }, { merge: true }).catch(e => console.error(e)); // 에러 발생해도 학습에 방해되지 않도록 백그라운드 처리
+      }
+    } else {
+      // 💡 오답일 경우에만 해당 문제를 맨 뒤로 보냅니다. (남은 문항 수는 유지됨)
+      if (shiftedItem) {
         nextQueue.push(shiftedItem);
+      }
     }
 
     setQuestionQueue(nextQueue);
@@ -542,6 +568,7 @@ export default function App() {
       });
     }
 
+    // 결과 화면 전환 (Auto-save가 작동하므로 마지막 문제 제출용으로만 남겨둠)
     if (exam.mode === 'study' && newlyMasteredTexts.length > 0) {
       const progressDocRef = doc(db, 'progress', `${userProfile.uid}_${currentExamId}`);
       await setDoc(progressDocRef, {
@@ -638,7 +665,6 @@ export default function App() {
     link.click();
   };
 
-  // 현재 탭에 맞는 시험 목록 필터링
   const displayedExams = exams.filter(e => e.mode === studentTab);
 
   return (
@@ -673,7 +699,6 @@ export default function App() {
 
           <main className="p-6 max-w-5xl mx-auto w-full flex-1 flex flex-col">
             
-            {/* 로그인 전 홈 화면 */}
             {view === 'home' && !userProfile && (
               <div className="flex flex-col items-center gap-12 py-20 text-center flex-1 justify-center">
                 <h2 className="text-4xl sm:text-5xl font-black text-slate-800 break-keep">뷔르트 제품 Quiz</h2>
@@ -683,8 +708,6 @@ export default function App() {
                     <button onClick={() => setAuthMode('register')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${authMode === 'register' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}>최초 등록</button>
                   </div>
                   <div className="space-y-4">
-                    
-                    {/* 💡 사번 WN 고정 및 8자리 검증 입력창 */}
                     <div className="flex items-center bg-slate-50 border rounded-2xl focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all overflow-hidden">
                       <span className="pl-5 pr-2 font-black text-slate-400">WN</span>
                       <input 
@@ -698,7 +721,6 @@ export default function App() {
                         className="w-full bg-transparent p-4 pl-1 text-sm outline-none font-bold placeholder:font-normal text-slate-700"
                       />
                     </div>
-
                     {authMode === 'register' && (
                       <input type="text" value={nameInput} onChange={e => setNameInput(e.target.value)} placeholder="실명 (예: 홍길동)" className="w-full bg-slate-50 border p-4 rounded-2xl text-sm outline-none focus:border-blue-500 transition-colors text-center font-bold placeholder:font-normal"/>
                     )}
@@ -710,7 +732,6 @@ export default function App() {
               </div>
             )}
 
-            {/* 로그인 후 학생 대시보드 (자율학습 vs 평가 탭 분리) */}
             {view === 'home' && userProfile && (
                <div className="flex flex-col items-center py-10 w-full animate-fade-in-up">
                 <div className="text-center mb-10">
@@ -720,7 +741,6 @@ export default function App() {
                 </div>
 
                 <div className="w-full max-w-3xl">
-                  {/* 탭 네비게이션 */}
                   <div className="flex p-1.5 bg-slate-200/50 rounded-2xl sm:rounded-full mb-8 relative z-10 w-full">
                     <button 
                       onClick={() => setStudentTab('study')} 
@@ -736,13 +756,12 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* 콘텐츠 영역 */}
                   <div className="bg-white p-6 sm:p-10 rounded-[2.5rem] shadow-sm border border-slate-200 w-full">
                     <div className="mb-6 border-b pb-4">
                       {studentTab === 'study' ? (
                         <>
                           <h3 className="text-xl font-black text-emerald-700 flex items-center gap-2">📖 현재 진행 가능한 자율 학습 목록</h3>
-                          <p className="text-sm text-slate-500 mt-2">정답과 해설을 확인하며 내 페이스대로 자유롭게 학습할 수 있습니다.</p>
+                          <p className="text-sm text-slate-500 mt-2">틀린 문제는 끝까지 다시 나오며, 도중에 종료해도 진행 상황이 실시간으로 저장됩니다.</p>
                         </>
                       ) : (
                         <>
@@ -766,15 +785,28 @@ export default function App() {
                                 <h4 className="font-bold text-lg sm:text-xl text-slate-800 group-hover:text-blue-700 transition-colors break-keep">{exam.title}</h4>
                               </div>
                               <div className="flex gap-3 text-xs font-bold text-slate-500">
-                                <span className="bg-slate-200/50 px-3 py-1 rounded-lg">문항 수: {exam.displayCount || exam.questions.length}개</span>
+                                <span className="bg-slate-200/50 px-3 py-1 rounded-lg">전체 문항: {exam.questions.length}개</span>
                               </div>
                             </div>
-                            <button 
-                              onClick={() => { setCurrentExamId(exam.id); setView('student-entry'); }}
-                              className={`w-full sm:w-auto text-white px-8 py-4 rounded-2xl font-black transition-all text-sm sm:text-base shadow-md active:scale-95 whitespace-nowrap ${studentTab === 'study' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200' : 'bg-purple-500 hover:bg-purple-600 shadow-purple-200'}`}
-                            >
-                              {studentTab === 'study' ? '학습 시작하기 👉' : '응시 시작하기 👉'}
-                            </button>
+                            
+                            {/* 💡 자율학습 창구인 경우 초기화 버튼 추가 */}
+                            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                                {studentTab === 'study' && (
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleResetProgress(exam.id); }}
+                                      className="px-4 py-3 sm:py-4 rounded-2xl font-bold transition-all text-sm whitespace-nowrap bg-white text-slate-500 border border-slate-200 hover:bg-slate-100 shadow-sm active:scale-95"
+                                      title="진행률을 0%로 초기화하고 처음부터 다시 풉니다."
+                                    >
+                                      🔄 초기화
+                                    </button>
+                                )}
+                                <button 
+                                  onClick={() => { setCurrentExamId(exam.id); setView('student-entry'); }}
+                                  className={`w-full sm:w-auto text-white px-8 py-3 sm:py-4 rounded-2xl font-black transition-all text-sm sm:text-base shadow-md active:scale-95 whitespace-nowrap ${studentTab === 'study' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200' : 'bg-purple-500 hover:bg-purple-600 shadow-purple-200'}`}
+                                >
+                                  {studentTab === 'study' ? '이어서 학습하기 👉' : '응시 시작하기 👉'}
+                                </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -788,7 +820,7 @@ export default function App() {
               </div>
             )}
 
-            {/* 관리자 로그인 & 대시보드 화면들 (기존과 동일) */}
+            {/* 관리자 영역 전체 유지 (기존 코드와 동일) */}
             {view === 'admin-login' && (
               <div className="max-w-md mx-auto py-20 text-center flex-1">
                 <h2 className="text-2xl font-bold mb-8 text-slate-800">관리자 인증</h2>
@@ -1162,21 +1194,30 @@ export default function App() {
             {/* 자율 학습 진행 화면 */}
             {view === 'student-take' && exams.find(e => e.id === currentExamId)?.mode !== 'test' && questionQueue.length > 0 && (
               <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8 pb-32">
+                {/* 💡 헤더에 나가기 버튼과 남은 문항수 UI 추가 */}
                 <div className="bg-white/90 backdrop-blur-md p-4 sm:p-6 rounded-3xl sm:rounded-[2rem] sticky top-20 border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 shadow-xl z-20">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-600 rounded-full flex items-center justify-center text-white font-black text-sm sm:text-base shrink-0">{userProfile?.name[0]}</div>
                     <span className="font-bold text-sm sm:text-base text-slate-700 line-clamp-1">{userProfile?.name} 님 학습 중</span>
                   </div>
-                  <span className="text-xs font-black px-4 py-2 sm:px-5 sm:py-2.5 bg-slate-900 text-white rounded-full tracking-widest shadow-sm self-end sm:self-auto">
-                    진행률: {activeQuestions.length - questionQueue.length + (isAnswerChecked && currentSelectedOption === questionQueue[0].q.answerIndex ? 1 : 0)} / {activeQuestions.length}
-                  </span>
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <button 
+                       onClick={() => {setView('home'); window.history.replaceState({}, '', window.location.pathname);}}
+                       className="text-xs font-bold px-4 py-2 sm:px-4 sm:py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors whitespace-nowrap"
+                    >
+                       🚪 중간에 나가기
+                    </button>
+                    <span className="text-xs font-black px-4 py-2 sm:px-5 sm:py-2.5 bg-slate-900 text-white rounded-full tracking-widest shadow-sm whitespace-nowrap">
+                      🎯 남은 문제: {questionQueue.length}개
+                    </span>
+                  </div>
                 </div>
                 
                 <div className="bg-white p-6 sm:p-12 rounded-3xl sm:rounded-[3.5rem] border shadow-sm space-y-8 sm:space-y-10">
                     <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                         <h4 className="text-xl sm:text-3xl font-black text-slate-800 flex gap-3 sm:gap-4 leading-relaxed break-keep"><span className="text-emerald-100 italic shrink-0">Q.</span>{questionQueue[0].q.text}</h4>
                         {firstAttemptAnswers[questionQueue[0].originalIndex] !== undefined && firstAttemptAnswers[questionQueue[0].originalIndex] !== questionQueue[0].q.answerIndex && (
-                            <span className="bg-red-100 text-red-600 text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1 rounded-full whitespace-nowrap self-start">🔄 재도전</span>
+                            <span className="bg-red-100 text-red-600 text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1 rounded-full whitespace-nowrap self-start">🔄 다시 출제됨</span>
                         )}
                     </div>
 
@@ -1211,7 +1252,7 @@ export default function App() {
                     {isAnswerChecked && (
                         <div className={`mt-6 sm:mt-8 p-5 sm:p-6 rounded-2xl sm:rounded-3xl border-2 animate-fade-in-up ${currentSelectedOption === questionQueue[0].q.answerIndex ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
                             <h5 className={`font-black text-lg sm:text-xl mb-2 flex items-center gap-2 ${currentSelectedOption === questionQueue[0].q.answerIndex ? 'text-emerald-700' : 'text-red-700'}`}>
-                                {currentSelectedOption === questionQueue[0].q.answerIndex ? '🎉 정답입니다!' : '❌ 틀렸습니다.'}
+                                {currentSelectedOption === questionQueue[0].q.answerIndex ? '🎉 정답입니다! (저장됨)' : '❌ 틀렸습니다.'}
                             </h5>
                             {questionQueue[0].q.explanation && (
                                 <p className="text-sm sm:text-base text-slate-700 whitespace-pre-wrap mt-4 leading-relaxed bg-white/50 p-4 rounded-xl break-keep">
@@ -1220,7 +1261,7 @@ export default function App() {
                                 </p>
                             )}
                             {!currentSelectedOption || currentSelectedOption !== questionQueue[0].q.answerIndex ? (
-                                <p className="text-red-500 font-bold mt-4 text-xs sm:text-sm px-1 sm:px-2">※ 이 문제는 나중에 다시 출제됩니다.</p>
+                                <p className="text-red-500 font-bold mt-4 text-xs sm:text-sm px-1 sm:px-2">※ 이 문제는 확실히 익힐 수 있도록 순서가 맨 뒤로 밀려납니다.</p>
                             ) : null}
                         </div>
                     )}
