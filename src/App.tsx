@@ -85,8 +85,6 @@ export default function App() {
   
   const [view, setView] = useState('home');
   const [adminTab, setAdminTab] = useState<'exams' | 'analytics' | 'bank'>('exams');
-  
-  // 💡 학생 화면 탭 상태 추가 (study: 자율학습 창구, test: 공식시험 창구)
   const [studentTab, setStudentTab] = useState<'study' | 'test'>('study');
   
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -186,9 +184,12 @@ export default function App() {
     showToast('응시 링크가 복사되었습니다!');
   };
 
+  // 💡 사번 WN 자동 결합 및 8자리 검증 로직 추가
   const handleStudentAuth = async () => {
     if (!empIdInput.trim()) return showToast('사번을 입력해주세요.');
-    const finalEmpId = empIdInput.trim().replace(/\s+/g, '').toUpperCase();
+    if (empIdInput.length !== 8) return showToast('사번은 숫자 8자리로 입력해주세요. (예: 00155720)');
+    
+    const finalEmpId = `WN${empIdInput}`;
     const pseudoEmail = `${finalEmpId.toLowerCase()}@wuerth.exam`;
     const HIDDEN_SYSTEM_PASSWORD = "WuerthExamSecretPassword2026!";
 
@@ -682,7 +683,22 @@ export default function App() {
                     <button onClick={() => setAuthMode('register')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${authMode === 'register' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}>최초 등록</button>
                   </div>
                   <div className="space-y-4">
-                    <input type="text" value={empIdInput} onChange={e => setEmpIdInput(e.target.value.toUpperCase())} placeholder="사번 (예: WN1234)" className="w-full bg-slate-50 border p-4 rounded-2xl text-sm outline-none focus:border-blue-500 transition-colors text-center font-bold placeholder:font-normal"/>
+                    
+                    {/* 💡 사번 WN 고정 및 8자리 검증 입력창 */}
+                    <div className="flex items-center bg-slate-50 border rounded-2xl focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all overflow-hidden">
+                      <span className="pl-5 pr-2 font-black text-slate-400">WN</span>
+                      <input 
+                        type="text" 
+                        value={empIdInput} 
+                        onChange={e => {
+                          const onlyNums = e.target.value.replace(/[^0-9]/g, '');
+                          if (onlyNums.length <= 8) setEmpIdInput(onlyNums);
+                        }} 
+                        placeholder="사번 8자리 (예: 00155720)" 
+                        className="w-full bg-transparent p-4 pl-1 text-sm outline-none font-bold placeholder:font-normal text-slate-700"
+                      />
+                    </div>
+
                     {authMode === 'register' && (
                       <input type="text" value={nameInput} onChange={e => setNameInput(e.target.value)} placeholder="실명 (예: 홍길동)" className="w-full bg-slate-50 border p-4 rounded-2xl text-sm outline-none focus:border-blue-500 transition-colors text-center font-bold placeholder:font-normal"/>
                     )}
@@ -694,7 +710,7 @@ export default function App() {
               </div>
             )}
 
-            {/* 💡 완전히 새로워진 로그인 후 학생 대시보드 (자율학습 vs 평가 탭 분리) */}
+            {/* 로그인 후 학생 대시보드 (자율학습 vs 평가 탭 분리) */}
             {view === 'home' && userProfile && (
                <div className="flex flex-col items-center py-10 w-full animate-fade-in-up">
                 <div className="text-center mb-10">
